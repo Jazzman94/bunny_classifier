@@ -18,3 +18,17 @@ uv run ruff check .     # lint
 uv run mypy             # type check
 uv run pre-commit install  # git hooks (once)
 ```
+
+## Data
+
+Images live in `data/bunnies_batch_<YYMMDD>/` (gitignored) named `<label><number>.png`.
+The committed `data/manifest.csv` maps every image to a train/val/test split — append-only,
+so the test set stays stable as new batches arrive.
+
+```bash
+uv run bunny-data build-manifest  # scan, dedupe, assign splits; re-run is a no-op
+uv run bunny-data eda             # class/size distributions + sample grids -> reports/eda/
+```
+
+Cross-label near-duplicates are never auto-resolved; they land in
+`reports/near_dup_review.csv` (+ contact sheet PNG) for human review.
