@@ -32,3 +32,8 @@ uv run bunny-data eda             # class/size distributions + sample grids -> r
 
 Cross-label near-duplicates are never auto-resolved; they land in
 `reports/near_dup_review.csv` (+ contact sheet PNG) for human review.
+
+## Docs
+
+Detailed documentation lives in [`docs/`](docs/README.md) — see
+[the data pipeline](docs/data.md) for manifest, deduplication, and split policy.
