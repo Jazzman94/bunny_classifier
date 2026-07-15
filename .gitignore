@@ -6,11 +6,22 @@ dist/
 wheels/
 *.egg-info
 
-data/
-data
+# Raw image dataset (repo root only — src/bunny_classifier/data is code)
+/data/
 
 # Virtual environments
 .venv
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Experiment tracking
+mlruns/
+runs/
 
 # Claude
 .claude
