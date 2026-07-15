@@ -72,6 +72,12 @@ mypy_path = "src"
 module = ["torch.*", "torchvision.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# Without torch installed, torch.utils.data.Dataset resolves to Any; subclassing Any
+# is forbidden by strict mode, so relax that single check for the torch-dependent module.
+module = "bunny_classifier.data.dataset"
+disallow_subclassing_any = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
