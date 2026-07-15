@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Image classifier for bunny poses/activities — training pipeline and inference API."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pillow>=10.4",
+]
+
+[project.scripts]
+bunny-data = "bunny_classifier.data.cli:main"
 
 [project.optional-dependencies]
 # Prod image installs only `serve` (ROADMAP §6 Phase 0/6).
@@ -61,6 +66,17 @@ python_version = "3.12"
 strict = true
 packages = ["bunny_classifier"]
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+# torch/torchvision are only installed with the `train` extra; CI type-checks without them.
+module = ["torch.*", "torchvision.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Without torch installed, torch.utils.data.Dataset resolves to Any; subclassing Any
+# is forbidden by strict mode, so relax that single check for the torch-dependent module.
+module = "bunny_classifier.data.dataset"
+disallow_subclassing_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

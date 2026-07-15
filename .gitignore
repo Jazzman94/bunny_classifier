@@ -6,8 +6,13 @@ dist/
 wheels/
 *.egg-info
 
-# Raw image dataset (repo root only — src/bunny_classifier/data is code)
-/data/
+# Raw image dataset (repo root only — src/bunny_classifier/data is code).
+# `/data/*` + negation so the split manifest IS tracked while images are not.
+/data/*
+!/data/manifest.csv
+
+# Generated reports (EDA artifacts, near-dup review sheets)
+/reports/
 
 # Virtual environments
 .venv
