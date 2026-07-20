@@ -121,6 +121,7 @@ assigned to a single split.
 | `dataset.py` | `BunnyDataset` — PyTorch `Dataset` reading exclusively from the manifest; returns `(float32 tensor 3×224×224, class index)`. Also defines `train_transforms()` (RandomResizedCrop, flip, color jitter, rotation) and `eval_transforms()` (resize 256 → center-crop 224 → ImageNet normalization). The eval pipeline is a contract: serving must preprocess identically, and a parity test will enforce this once the serving layer exists. |
 | `eda.py` | Writes dataset reports to `reports/eda/`: class/split distribution, image size statistics, per-class sample grids. |
 | `review.py` | Renders the cross-label near-duplicate review report (CSV + contact sheet). |
+| `importer.py` | `import-batch`: renames a batch delivered as one subfolder per label (raw screenshots) into the flat `<label><number>.png` layout the scanner expects. |
 | `cli.py` | The `bunny-data` entry point (registered in `pyproject.toml` `[project.scripts]`). |
 
 ## Usage
@@ -128,18 +129,28 @@ assigned to a single split.
 Ingesting a new photo batch:
 
 ```bash
-# 1. Add images under a NEW batch folder (never modify existing batches):
-#    data/bunnies_batch_<YYMMDD>/<label><number>.png
+# 1. Drop raw images into a NEW batch folder, one subfolder per label
+#    (never modify existing batches):
+#    data/bunnies_batch_<YYMMDD>/<label>/<anything>.png
 
-# 2. Rebuild the manifest (append-only; existing rows are untouched):
+# 2. Flatten + rename into the '<label><number>.png' convention:
+uv run bunny-data import-batch data/bunnies_batch_<YYMMDD>   # --dry-run to preview
+#    Files land at data/bunnies_batch_<YYMMDD>/<label>NN.png and the
+#    (now empty) label subfolders are removed. Numbering restarts at 01 per
+#    batch; the batch folder in the manifest path keeps names unique.
+
+# 3. Rebuild the manifest (append-only; existing rows are untouched):
 uv run bunny-data build-manifest
 
-# 3. If the output says "REVIEW NEEDED", inspect reports/near_dup_review.png.
-#    Correct labels -> no action. Wrong label -> rename the file, go to 2.
+# 4. If the output says "REVIEW NEEDED", inspect reports/near_dup_review.png.
+#    Correct labels -> no action. Wrong label -> rename the file, go to 3.
 
-# 4. Optional dataset reports:
+# 5. Optional dataset reports:
 uv run bunny-data eda
 ```
+
+Step 2 is only needed when a batch arrives as label subfolders; a batch already
+named `<label><number>.png` goes straight to step 3.
 
 `data/manifest.csv` is generated output — never edit it by hand.
 

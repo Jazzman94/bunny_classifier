@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from bunny_classifier.data.eda import run_eda
+from bunny_classifier.data.importer import apply_batch_import, plan_batch_import
 from bunny_classifier.data.manifest import build_manifest
 from bunny_classifier.data.review import write_review_report
 
@@ -30,10 +31,19 @@ def main(argv: list[str] | None = None) -> int:
     eda.add_argument("--manifest", type=Path, default=None)
     eda.add_argument("--out-dir", type=Path, default=None, help="default: <repo-root>/reports/eda")
 
+    imp = sub.add_parser(
+        "import-batch",
+        help="rename per-label subfolders into flat '<label><number>.png' files",
+    )
+    imp.add_argument("batch_dir", type=Path, help="batch folder holding one subfolder per label")
+    imp.add_argument(
+        "--dry-run", action="store_true", help="print the planned renames without moving anything"
+    )
+
     args = parser.parse_args(argv)
     repo_root: Path = args.repo_root.resolve()
     data_dir = getattr(args, "data_dir", None) or repo_root / "data"
-    manifest = args.manifest or data_dir / "manifest.csv"
+    manifest = getattr(args, "manifest", None) or data_dir / "manifest.csv"
 
     if args.command == "build-manifest":
         result = build_manifest(data_dir, manifest, repo_root, seed=args.seed)
@@ -54,6 +64,18 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = args.out_dir or repo_root / "reports" / "eda"
         run_eda(manifest, repo_root, out_dir)
         print(f"EDA artifacts written to {out_dir}")
+    elif args.command == "import-batch":
+        batch_dir: Path = args.batch_dir.resolve()
+        plan = plan_batch_import(batch_dir)
+        for label, count in plan.per_label.items():
+            print(f"{label}: {count} -> {label}01.png .. {label}{count:02d}.png")
+        print(f"total: {len(plan.renames)} images in {len(plan.per_label)} labels")
+        if args.dry_run:
+            print("dry run: nothing moved. Re-run without --dry-run to apply.")
+        else:
+            apply_batch_import(plan, batch_dir)
+            print(f"renamed {len(plan.renames)} images in {batch_dir}")
+            print("next: uv run bunny-data build-manifest")
     return 0
 
 

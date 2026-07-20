@@ -26,6 +26,7 @@ The committed `data/manifest.csv` maps every image to a train/val/test split —
 so the test set stays stable as new batches arrive.
 
 ```bash
+uv run bunny-data import-batch data/bunnies_batch_<YYMMDD>  # label subfolders -> <label>NN.png
 uv run bunny-data build-manifest  # scan, dedupe, assign splits; re-run is a no-op
 uv run bunny-data eda             # class/size distributions + sample grids -> reports/eda/
 ```
