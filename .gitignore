@@ -31,4 +31,8 @@ runs/
 # Claude
 .claude
 context.txt
+
+# Local planning/working docs (kept out of the repo; copy between
+# machines manually alongside the raw images)
 ROADMAP.md
+HANDOFF.md
