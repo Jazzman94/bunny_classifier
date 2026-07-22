@@ -220,6 +220,59 @@ is why it is a forgiving default.
 **`zero_grad()`** matters because PyTorch *accumulates* gradients: without it,
 batch 2 would be updated using batch 1's gradients as well.
 
+### What the learning rate actually does
+
+The gradient supplies a *direction*; the learning rate supplies the *distance*
+travelled along it per step. Everything else about training is downstream of
+that one number.
+
+Measured on the baseline — 15 epochs, seed 42, only the learning rate changed:
+
+| lr | train loss @1 | train loss @15 | val macro-F1 | reading |
+|---|---:|---:|---:|---|
+| 1e-5 | 2.09 | 1.96 | 0.1023 | never left the starting point |
+| 1e-4 | 2.05 | 1.63 | 0.3881 | learning, far from converged |
+| **1e-3** | 1.96 | 0.86 | **0.7547** | the default, and the best here |
+| 1e-2 | **3.05** | **0.63** | 0.7271 | overshoots, then fits train hardest — and generalizes worse |
+| 1e-1 | **26.16** | 3.20 | 0.7034 | diverges on the first steps, never recovers |
+
+Three signatures worth being able to recognize:
+
+- **Too low.** At 1e-5 the loss falls from 2.09 to 1.96 in fifteen epochs.
+  Random guessing over 7 classes costs `ln(7) = 1.946`, so the model is still at
+  chance — macro-F1 0.10 confirms it. Nothing is broken; the steps are simply
+  too small to arrive anywhere.
+- **Too high.** At 1e-1 the epoch-1 training loss is **26.16**, an order of
+  magnitude *above* where it started. The first updates threw the head far past
+  anything sensible. It partially recovers but keeps oscillating (3.20 train /
+  4.07 val at the end) instead of settling.
+- **Slightly too high — the subtle one.** At 1e-2 the epoch-1 loss (3.05) also
+  starts above the initial 1.95, so it overshot too, yet it ends with the
+  *lowest training loss of the whole sweep* (0.63) while scoring worse on val
+  than 1e-3. Optimizing the training set harder is not the goal. Judge a
+  learning rate on validation, never on training loss.
+
+**Adam changes what the number means.** With plain SGD the step is
+`lr × gradient`, so the right `lr` depends on how large the gradients happen to
+be. Adam divides by a running estimate of gradient magnitude, so each parameter
+moves by roughly `lr` per step regardless of gradient scale. That is why 1e-3 is
+a famous default that transfers across problems, and why Adam tolerates being
+wrong by a factor of ten — as the table shows, 1e-2 and 1e-1 still land near
+0.70 rather than failing outright.
+
+**It is not a universal constant, though.** In the backbone comparison above,
+`convnext_tiny` needed 1e-2 (+0.026 over 1e-3) while `resnet18` prefers 1e-3.
+The features leaving different backbones have different scales, so the head's
+gradients do too. This is the concrete reason a sweep must tune the learning
+rate *per backbone* rather than inheriting one architecture's default.
+
+**How to find it.** Sweep log-spaced (1e-5, 1e-4, … as above) rather than
+linearly — the useful range spans orders of magnitude. Take the largest value
+that still trains stably, which typically sits just below where the epoch-1 loss
+starts rising above its initial value. Phase 3 adds schedules (cosine,
+one-cycle) that begin high for fast progress and decay for fine settling,
+getting both properties from one run.
+
 Two units of scale:
 
 - **Batch** — 32 images processed together. The gradient is averaged over them,
