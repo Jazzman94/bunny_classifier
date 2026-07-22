@@ -182,6 +182,16 @@ can be more specialized to ImageNet classification and less *linearly
 separable* for a new task, and linear-probe quality is known to rank models
 differently than fine-tuned quality does.
 
+One hypothesis was tested and **rejected**: torchvision's weights for
+`efficientnet_v2_s` were trained and evaluated at **384×384**, not the 224 our
+frozen §5.2 pipeline feeds it (it is the only one of the eleven that deviates —
+the rest use crop 224, with resize varying between 232, 236 and 256, and
+`efficientnet_b0`/`swin_t` using bicubic where we use bilinear). Feeding it its
+native 384 in a linear probe moved the score from 0.6331 to 0.6432 — about one
+validation image, i.e. noise. Resolution mismatch is *not* why it
+underperforms. Bicubic vs bilinear was likewise negligible (0.7236 vs 0.7297 on
+`efficientnet_b0`), which is what justifies using one interpolation for all.
+
 That last point is the one to carry into Phase 3: **every number above is a
 frozen-backbone linear probe.** Unfreezing changes what is being measured, and
 the ranking can reorder — a model whose features are not linearly separable
@@ -342,6 +352,14 @@ Two honest caveats about that table:
 **Why not go bigger?** Compute scales with area: 384² is 2.9× the pixels of
 224², hence ~2.9× the work and memory in every convolution. Phase 6 deploys to a
 1 GB e2-micro with no GPU, where every pixel shows up in response latency.
+
+**Where did 224 come from here?** Not from this dataset and not from the
+backbone — it was frozen into ROADMAP §5.2 as a contract before any code
+existed, as the ImageNet convention. Judged purely on our images it is somewhat
+generous: the median shorter side is ~280 px and 43 % of images fall below 224,
+so a smaller crop would match the data better. Judged on the backbones it is
+right for ten of the eleven supported (see the backbone chapter for the one
+exception and its measured impact).
 
 **Why resize to 256 before cropping 224?** 224/256 = 87.5 %, the standard
 ImageNet evaluation protocol. Resizing straight to 224×224 would either distort
