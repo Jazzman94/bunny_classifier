@@ -26,6 +26,8 @@ htmlcov/
 
 # Experiment tracking
 mlruns/
+mlartifacts/
+mlflow.db
 runs/
 
 # Claude

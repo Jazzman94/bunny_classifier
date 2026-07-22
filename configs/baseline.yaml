@@ -1,0 +1,18 @@
+# Phase 2 baseline: ImageNet-pretrained ResNet18, backbone frozen, weighted loss.
+# Every key is a field of TrainConfig (src/bunny_classifier/training/config.py);
+# omitted keys keep their dataclass default, and CLI flags override this file.
+#
+#   uv run bunny-train --config configs/baseline.yaml
+
+backbone: resnet18
+epochs: 15
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.0
+freeze_backbone: true
+class_weighting: true
+seed: 42
+device: auto
+experiment: bunny-classifier
+# Left off on purpose — the test split is only scored for a model being shipped.
+eval_test: false
