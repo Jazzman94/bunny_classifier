@@ -34,7 +34,23 @@ uv run bunny-data eda             # class/size distributions + sample grids -> r
 Cross-label near-duplicates are never auto-resolved; they land in
 `reports/near_dup_review.csv` (+ contact sheet PNG) for human review.
 
+## Training
+
+```bash
+uv sync --extra train
+uv run bunny-train                       # ResNet18, frozen backbone, weighted loss
+uv run bunny-train --config configs/baseline.yaml
+
+mlflow ui --backend-store-uri sqlite:///mlflow.db   # runs, params, artifacts
+tensorboard --logdir runs                          # curves
+```
+
+Headline metric is macro-F1 on the validation split, logged alongside the
+majority-class baseline. The test split is only scored with an explicit
+`--eval-test`.
+
 ## Docs
 
-Detailed documentation lives in [`docs/`](docs/README.md) — see
-[the data pipeline](docs/data.md) for manifest, deduplication, and split policy.
+Detailed documentation lives in [`docs/`](docs/README.md) —
+[the data pipeline](docs/data.md) for manifest, deduplication, and split policy;
+[training](docs/training.md) for transfer learning, metrics, and tracking.
