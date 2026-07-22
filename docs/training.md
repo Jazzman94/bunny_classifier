@@ -99,9 +99,94 @@ Consequences worth knowing:
 - The ceiling is lower than full fine-tuning. That is the expected trade, and
   exactly what Phase 3 lifts by unfreezing the last block(s).
 
-`SUPPORTED_BACKBONES` already covers `resnet18`, `mobilenet_v3_small` and
-`efficientnet_b0` so the Phase 3 sweep needs no factory changes; only ResNet18
-is used as the baseline.
+## Choosing a backbone
+
+`build_model()` takes any name in `SUPPORTED_BACKBONES` and needs no
+per-architecture code: `models.get_model()` builds it, and the head is located
+by finding the last `nn.Linear` in the module traversal (that is the 1000-class
+ImageNet classifier for every torchvision classification model — asserted for
+all of them in `tests/test_backbone.py`). Adding a backbone is one entry in the
+tuple.
+
+Cost measured locally at 224×224, batch 1, **two CPU threads** to mirror the
+e2-micro target. ImageNet top-1 is torchvision's published figure for the
+weights `DEFAULT` resolves to.
+
+| backbone | params | fp32 MB | feat dim | CPU ms | top-1 |
+|---|---:|---:|---:|---:|---:|
+| `mobilenet_v3_small` | 2.5 M | 10 | 1024 | 3 | 67.7 |
+| `shufflenet_v2_x1_0` | 2.3 M | 9 | 1024 | 6 | 69.4 |
+| `mobilenet_v3_large` | 5.5 M | 22 | 1280 | 6 | 75.3 |
+| `efficientnet_b0` | 5.3 M | 21 | 1280 | 11 | 77.7 |
+| `regnet_y_800mf` | 6.4 M | 26 | 784 | 14 | 78.8 |
+| `resnet18` *(baseline)* | 11.7 M | 47 | 512 | 15 | 69.8 |
+| `resnet50` | 25.6 M | 102 | 2048 | 40 | 80.9 |
+| `efficientnet_v2_s` | 21.5 M | 86 | 1280 | 37 | 84.2 |
+| `convnext_tiny` | 28.6 M | 114 | 768 | 40 | 82.5 |
+| `swin_t` | 28.3 M | 113 | 768 | 62 | 81.5 |
+| `vit_b_16` | 86.6 M | 346 | 768 | 134 | 81.1 |
+
+**Why top-1 matters more than usual here.** With the backbone frozen we are
+training a linear probe on fixed features, so feature quality *is* the ceiling —
+a 3 591-parameter head cannot compensate for a weak representation. ImageNet
+top-1 is a decent (not perfect) proxy for that quality.
+
+Read the table and `resnet18` looks poor: `mobilenet_v3_large` beats it on
+**every** axis — half the parameters, half the size, 2.5× faster, +5.5 top-1.
+ResNet18 is a 2015 design kept as the baseline because it is the
+well-understood reference point, not because it is the best choice.
+
+The last two rows do not fit the Phase 6 deployment budget (api ≤ 300 MB RAM);
+they are available for local experiments only.
+
+**A second axis: better weights for the same architecture.** torchvision ships
+`IMAGENET1K_V2` weights for several models — identical architecture and cost,
+retrained with a modern recipe:
+
+| model | V1 | V2 | gain |
+|---|---:|---:|---:|
+| `resnet50` | 76.1 | 80.9 | **+4.7** |
+| `regnet_y_800mf` | 76.4 | 78.8 | +2.4 |
+| `mobilenet_v3_large` | 74.0 | 75.3 | +1.2 |
+
+`pretrained=True` requests `weights="DEFAULT"`, which already resolves to the
+better set, so this needs no action. It is worth internalizing anyway: *how* a
+model was trained can matter as much as *what* it is. Note `resnet18` has no V2
+weights, which is part of why it sits at 69.8.
+
+### Measured on this dataset — the proxy failed
+
+ImageNet top-1 ranks candidates; it does not predict the winner. Frozen
+backbone, val macro-F1:
+
+| backbone | top-1 | lr 1e-3, 15 ep | tuned |
+|---|---:|---:|---:|
+| `resnet18` | 69.8 | **0.7547** | **0.7755** (40 ep) |
+| `convnext_tiny` | 82.5 | 0.7249 | 0.7507 (lr 1e-2, 40 ep) |
+| `mobilenet_v3_large` | 75.3 | 0.6991 | — |
+| `efficientnet_v2_s` | 84.2 | 0.6603 | 0.6640 (40 ep) · 0.6511 (lr 1e-2) |
+
+The worst performer on this dataset has the *best* ImageNet score, and the
+baseline with the *worst* ImageNet score wins.
+
+Part of the gap was an unfair comparison: the defaults were chosen for
+ResNet18, and `convnext_tiny` gained +0.026 once given a higher learning rate
+and more epochs. This is a general benchmarking trap — **comparing
+architectures at hyperparameters tuned for one of them measures the tuning, not
+the architecture.** A real sweep must tune per backbone.
+
+But that does not rescue `efficientnet_v2_s`: it sits at 0.65–0.66 across
+learning rates and epoch counts, a genuine 0.11 behind ResNet18. Plausible
+reasons, none verified here — features from heavily regularized modern recipes
+can be more specialized to ImageNet classification and less *linearly
+separable* for a new task, and linear-probe quality is known to rank models
+differently than fine-tuned quality does.
+
+That last point is the one to carry into Phase 3: **every number above is a
+frozen-backbone linear probe.** Unfreezing changes what is being measured, and
+the ranking can reorder — a model whose features are not linearly separable
+today may still fine-tune best. Do not drop a candidate from the sweep based on
+its frozen score alone.
 
 ## The training loop
 
